@@ -9,6 +9,7 @@ gem 'rack', '~> 2.0', '>= 2.0.1'
 gem 'puma'
 
 gem 'sass-rails'
+gem 'neat'
 gem 'uglifier'
 gem 'coffee-rails'
 
@@ -39,7 +40,7 @@ gem "caseflow", git: "https://github.com/department-of-veterans-affairs/caseflow
 gem 'multi_json'
 
 group :development, :test do
- 
+
   gem 'byebug', platform: :mri
   gem 'dotenv-rails'
 end
@@ -47,7 +48,7 @@ end
 group :development do
   gem 'web-console'
   gem 'listen'
- 
+
   gem 'spring'
   gem 'spring-watcher-listen'
 end
