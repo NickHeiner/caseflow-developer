@@ -1,0 +1,26 @@
+version: "2"
+
+volumes:
+  db:
+    external: false
+
+services:
+  db:
+    image: postgres:9.5
+    volumes:
+      - 'db:/usr/local/pgsql/data'
+    expose:
+      - "5432"
+    ports:
+      - "5433:5432"
+
+  app:
+    env_file: .env
+    build: .
+    volumes:
+      - ".:/usr/src/app"
+    command: foreman start -f Procfile.dev
+    ports:
+      - "3000:5000"
+    depends_on:
+      - db
