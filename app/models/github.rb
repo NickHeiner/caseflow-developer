@@ -6,7 +6,6 @@ class Github
   RESOLUTION_LABELS =["Resolution Team - Tier 2", "Resolution Team - Tier 3", "Resolution Team - Training"]
   STATE_LABELS = ["In-Progress", "In Progress", "Blocked", "Closed"]
   
-  GITHUB_TEAM_NAMES = ['appeals-pm', 'dsva-appeals-caseflow']
   GITHUB_TEAM_IDS = {
     APPEALS_PM: 2221656,
     CASEFLOW: 2221658
