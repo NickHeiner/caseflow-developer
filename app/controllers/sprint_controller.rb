@@ -3,7 +3,12 @@ class SprintController < ApplicationController
 
   def standup
     @ci = CI.new
-    @github = Github.new
+
+    on_fetch_error = Proc.new do
+      render 'timeout', :status => 500
+    end
+
+    @github = Github.new on_fetch_error
 
     def sort_issues(issues, assignees) 
       issues.sort_by do |login, issues| 
@@ -12,12 +17,14 @@ class SprintController < ApplicationController
         # changes right now. Also, I am not sure that Ruby hashes have
         # an iterating order as part of their contract, but in practice
         # it seems to work! :)
-        if login == 'unassigned' then '!' else assignees[login]['name'] end
+        if login == 'unassigned' then '!' else (assignees[login]['name'] || login) end
       end.to_h
     end
 
+    Rails.logger.debug "Getting issues by assignee"
     in_progress_by_assignee_unsorted, @assignees = @github.issues_by_assignee(params[:team], "In-Progress", "In Progress")
-
+    
+    Rails.logger.debug "Sorting issues"
     @in_progress_by_assignee = sort_issues(in_progress_by_assignee_unsorted, @assignees)
 
     in_progress_by_assignee_optional_unsorted = []
@@ -56,6 +63,7 @@ class SprintController < ApplicationController
 
     # TODO We shouldn't be doing two requests to each repo to get both 'In Progress' and in 'In Validation' tickets.
     # We should just make a single request and then do the sorting on this end. That should be much faster.
+    Rails.logger.debug "Getting in-validation issues"
     @in_validation_issues = 
       @github.get_issues(params[:team], "OPEN", "In-Validation", "In Validation") if params[:team] == 'CASEFLOW'
     @product_support_issues = @github.get_product_support_issues if params[:team] == 'APPEALS_PM'

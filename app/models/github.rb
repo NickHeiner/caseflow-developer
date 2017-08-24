@@ -14,6 +14,10 @@ class Github
 
   attr_accessor :team_members, :team_repos
 
+  def initialize(on_fetch_error)
+    @on_fetch_error = on_fetch_error
+  end
+
   def get_issues(*args)
     work_items = get_work_items(*args)
     work_items.find_all do |work_item|
@@ -93,7 +97,7 @@ class Github
         repo_name: repo[:name],
         state: state,
         labels: labels
-      })
+      }, @on_fetch_error)
 
       def annotate_work_items!(items, type, repo)
         items.each do |item|
@@ -282,6 +286,7 @@ class Github
   private
 
   def get_team_info(team_name)
+    Rails.logger.debug "Getting team info for '#{team_name}'"
     team_ids = if team_name.nil?
       GITHUB_TEAM_IDS.values
     else
