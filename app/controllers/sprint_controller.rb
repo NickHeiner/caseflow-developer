@@ -1,72 +1,77 @@
 class SprintController < ApplicationController
   before_action :authenticate_user!
 
-  def standup
-    @ci = CI.new
-
-    on_fetch_error = Proc.new do
+  def handle_timeout_error
+    begin
+      yield
+    rescue Net::OpenTimeout, Net::ReadTimeout
       render 'timeout', :status => 500
     end
+  end
 
-    @github = Github.new on_fetch_error
+  def standup
+    handle_timeout_error do
+      @ci = CI.new
+      @github = Github.new 
 
-    def sort_issues(issues, assignees) 
-      issues.sort_by do |login, issues| 
-        # '!' is a hack to move 'unassigned' to the front of the list.
-        # There is a larger cleanup to do, but I don't want to make too many
-        # changes right now. Also, I am not sure that Ruby hashes have
-        # an iterating order as part of their contract, but in practice
-        # it seems to work! :)
-        if login == 'unassigned' then '!' else (assignees[login]['name'] || login) end
+      def sort_issues(issues, assignees) 
+        issues.sort_by do |login, issues| 
+          # '!' is a hack to move 'unassigned' to the front of the list.
+          # There is a larger cleanup to do, but I don't want to make too many
+          # changes right now. Also, I am not sure that Ruby hashes have
+          # an iterating order as part of their contract, but in practice
+          # it seems to work! :)
+          if login == 'unassigned' then '!' else (assignees[login]['name'] || login) end
+        end.to_h
+      end
+
+      Rails.logger.debug "Getting issues by assignee"
+      in_progress_by_assignee_unsorted, @assignees = @github.issues_by_assignee(params[:team], "In-Progress", "In Progress")
+      
+      Rails.logger.debug "Sorting issues"
+      @in_progress_by_assignee = sort_issues(in_progress_by_assignee_unsorted, @assignees)
+
+      in_progress_by_assignee_optional_unsorted = []
+      required_logins = @github.team_members.map {|i| i[:login] }
+      @in_progress_by_assignee.each do |assignee, issues|
+        next if assignee == 'unassigned'
+        unless required_logins.include?(assignee)
+          in_progress_by_assignee_optional_unsorted << [assignee, issues]
+          @in_progress_by_assignee.delete(assignee)
+        end
+      end
+
+      @in_progress_by_assignee_optional = sort_issues(in_progress_by_assignee_optional_unsorted, @assignees)
+
+      @wip_limit = 3
+      @wip_limit_issues_by_assignee = @in_progress_by_assignee.map do |assignee, issues|
+        issue_count = issues.reject do |issue|
+          issue['repositoryName'] == "appeals-design-research" || issue['type'] == :pull_request
+        end.size
+        if issue_count <= @wip_limit
+          norm = 'norm-good'
+        elsif issue_count <= @wip_limit * 2
+          norm = 'norm-mediocre'
+        else
+          norm = 'norm-bad'
+        end
+
+        [
+          assignee, 
+          {
+            :issue_count => issue_count,
+            :norm => norm
+          }
+        ]
       end.to_h
+
+      # TODO We shouldn't be doing two requests to each repo to get both 'In Progress' and in 'In Validation' tickets.
+      # We should just make a single request and then do the sorting on this end. That should be much faster.
+      Rails.logger.debug "Getting in-validation issues"
+      @in_validation_issues = 
+        @github.get_issues(params[:team], "OPEN", "In-Validation", "In Validation") if params[:team] == 'CASEFLOW'
+      @product_support_issues = @github.get_product_support_issues if params[:team] == 'APPEALS_PM'
     end
-
-    Rails.logger.debug "Getting issues by assignee"
-    in_progress_by_assignee_unsorted, @assignees = @github.issues_by_assignee(params[:team], "In-Progress", "In Progress")
-    
-    Rails.logger.debug "Sorting issues"
-    @in_progress_by_assignee = sort_issues(in_progress_by_assignee_unsorted, @assignees)
-
-    in_progress_by_assignee_optional_unsorted = []
-    required_logins = @github.team_members.map {|i| i[:login] }
-    @in_progress_by_assignee.each do |assignee, issues|
-      next if assignee == 'unassigned'
-      unless required_logins.include?(assignee)
-        in_progress_by_assignee_optional_unsorted << [assignee, issues]
-        @in_progress_by_assignee.delete(assignee)
-      end
-    end
-
-    @in_progress_by_assignee_optional = sort_issues(in_progress_by_assignee_optional_unsorted, @assignees)
-
-    @wip_limit = 3
-    @wip_limit_issues_by_assignee = @in_progress_by_assignee.map do |assignee, issues|
-      issue_count = issues.reject do |issue|
-        issue['repositoryName'] == "appeals-design-research" || issue['type'] == :pull_request
-      end.size
-      if issue_count <= @wip_limit
-        norm = 'norm-good'
-      elsif issue_count <= @wip_limit * 2
-        norm = 'norm-mediocre'
-      else
-        norm = 'norm-bad'
-      end
-
-      [
-        assignee, 
-        {
-          :issue_count => issue_count,
-          :norm => norm
-        }
-      ]
-    end.to_h
-
-    # TODO We shouldn't be doing two requests to each repo to get both 'In Progress' and in 'In Validation' tickets.
-    # We should just make a single request and then do the sorting on this end. That should be much faster.
-    Rails.logger.debug "Getting in-validation issues"
-    @in_validation_issues = 
-      @github.get_issues(params[:team], "OPEN", "In-Validation", "In Validation") if params[:team] == 'CASEFLOW'
-    @product_support_issues = @github.get_product_support_issues if params[:team] == 'APPEALS_PM'
   end
 
   #BVA Technology

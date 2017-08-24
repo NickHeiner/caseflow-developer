@@ -6,17 +6,13 @@ class Github
   RESOLUTION_LABELS =["Resolution Team - Tier 2", "Resolution Team - Tier 3", "Resolution Team - Training"]
   STATE_LABELS = ["In-Progress", "In Progress", "Blocked", "Closed"]
   
-  
+  GITHUB_TEAM_NAMES = ['appeals-pm', 'dsva-appeals-caseflow']
   GITHUB_TEAM_IDS = {
     APPEALS_PM: 2221656,
     CASEFLOW: 2221658
   }
 
   attr_accessor :team_members, :team_repos
-
-  def initialize(on_fetch_error)
-    @on_fetch_error = on_fetch_error
-  end
 
   def get_issues(*args)
     work_items = get_work_items(*args)
@@ -97,7 +93,7 @@ class Github
         repo_name: repo[:name],
         state: state,
         labels: labels
-      }, @on_fetch_error)
+      })
 
       def annotate_work_items!(items, type, repo)
         items.each do |item|
@@ -294,10 +290,12 @@ class Github
     end
 
     @team_members = team_ids.map do |team_id|
+      Rails.logger.debug "Getting team members for #{team_id}"
       Octokit.team_members(team_id)
     end.flatten
-
+    
     @team_repos = team_ids.map do |team_id|
+      Rails.logger.debug "Getting team repos for #{team_id}"
       Octokit.team_repositories(team_id)
     end.flatten
   end
